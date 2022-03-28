@@ -1,0 +1,18 @@
+{
+    "ignore": ["node_modules", "public"],
+    "env": {
+      "NODE_ENV": "development",
+      "PORT": 4000,
+      "MONGO_URL": "mongodb://localhost:27017/shopping",
+      "MS_LOGIN": "Admin@9645054848",
+      "MS_PASSWORD": "marmar3587133mar",
+      "LOGIN_SBER": "marusik-11001-api",
+      "PASSWORD_SBER": "xZtA79hBB",
+      "TOKEN_SBER": "vqo693o0vkivb1719k2r81cq3",
+      "SESSION_SECRET": 10,
+      "GMAIL_USER": "o.fedin96@gmail.com",
+      "GMAIL_PASSWORD": "Asser220"
+    },
+    "ext": ".js,.json",
+    "watch": "./"
+  }
