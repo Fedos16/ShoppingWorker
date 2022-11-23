@@ -298,14 +298,14 @@ async function getGoogleData() {
     });
 }
 async function setDataForGoogleAndMS() {
-    async function create_ms_order(ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, headers, ms_login, ms_pass, ms_delivery, ms_delivery_address) {
+    function create_ms_order({ ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, headers, ms_login, ms_pass, ms_delivery, ms_delivery_address, ms_city, ms_index }) {
         // search order in moysklad
         axios.get(
             'https://online.moysklad.ru/api/remap/1.1/entity/customerorder?filter=name='+ms_numOrder,
         {
             headers: headers,
             auth: {username: ms_login,password: ms_pass}
-        }).then(function(response) {
+        }).then(response => {
     
             if (response.data.rows.length > 0) {
                 console.log('Заказ №'+ms_numOrder+' уже существует!');
@@ -317,17 +317,21 @@ async function setDataForGoogleAndMS() {
                     
                         var col = parseInt(ms_idProduct[ms_purchase][i].col);
                         var price = parseInt(ms_idProduct[ms_purchase][i].price);
+
                         if (col == null) var col = 1;
+
                         var variant = ms_idProduct[ms_purchase][i].variant;
+
                         console.log(` --- VARIANT: ${variant}`);
-                        if(variant != null && variant != '') {
+
+                        if (variant != null && variant != '') {
                             var response = await axios.get(
                                 'https://online.moysklad.ru/api/remap/1.1/entity/variant/'+encodeURIComponent(variant),
                             {
                                 headers: headers,
                                 auth: {username: ms_login,password: ms_pass}
                             });
-                            if(response.data.meta.href) {
+                            if (response.data.meta.href) {
                                 positions.push({
                                     "quantity": col,
                                     "price": (price*100)/col,
@@ -341,13 +345,14 @@ async function setDataForGoogleAndMS() {
                                     }
                                 });
                             }
-                        }else{
+                        } else{
                             var response = await axios.get(
                                 'https://online.moysklad.ru/api/remap/1.1/entity/product?search='+encodeURIComponent(ms_idProduct[ms_purchase][i].art),
                             {
                                 headers: headers,
                                 auth: {username: ms_login,password: ms_pass}
                             });
+
                             if(response.data.rows.length > 0) {
                                 //this.product_href = response.data.rows[0].meta.href;
                                 //console.log(response.data.rows[0].meta.href);
@@ -369,6 +374,9 @@ async function setDataForGoogleAndMS() {
                             }
                         }
                     }
+
+                    let description = `${ms_delivery} ${ms_index} ${ms_city} ${ms_delivery_address} ${ms_street} ${ms_home} ${ms_room}`;
+                    if (!ms_index) description = `${ms_delivery} ${ms_delivery_address} ${ms_street} ${ms_home} ${ms_room}`;
     
                     // create order in moysklad
                     var createOrderUrl = 'https://online.moysklad.ru/api/remap/1.1/entity/customerorder';
@@ -403,12 +411,14 @@ async function setDataForGoogleAndMS() {
                             }
                         },
                         "positions": positions,
-                        "description": ms_delivery+' '+ms_delivery_address+' '+ms_street+' '+ms_home+' '+ms_room 
+                        "description": description
                     }
+
                     axios.post(createOrderUrl, data, {
                         headers: headers,
                         auth: {username: ms_login,password: ms_pass}
-                    }).then(function(response) {
+                    }).then(response => {
+
                         console.log('Новый заказ №'+ms_numOrder+' успешно создан!');
                         var order_ms_id = response.data.id;
                         //console.log(ms_idProduct[ms_purchase].col);
@@ -449,26 +459,27 @@ async function setDataForGoogleAndMS() {
                         axios.post(createPaymentUrl, payment_data, {
                             headers: headers,
                             auth: {username: ms_login,password: ms_pass}
-                        }).then(function(response) {
+                        }).then(response => {
                             //generatePositions(ms_idProduct, ms_purchase, headers, ms_login, ms_pass, order_ms_id);
-                        }).catch(function(error) {
-                            console.log(error);
+                        }).catch(e => {
+                            console.error(e);
                         });
     
                         //var already_query = [];
     
                     
-                    }).catch(function(error) {
-                        console.log(error);
+                    }).catch(e => {
+                        console.error(e);
                     });
+
                 }, 3000);
             }
-        }).catch(function(error) {
-            console.log(error);
+        }).catch(e => {
+            console.error(e);
         });
     }
-    let GoogleSheets = mainFunctions.GoogleSheets;
 
+    let GoogleSheets = mainFunctions.GoogleSheets;
 
     const now = new Date();
 
@@ -518,52 +529,53 @@ async function setDataForGoogleAndMS() {
         let ms_purchase = shop[x].purchase;
         let ms_delivery = shop[x].delivery;
         let ms_delivery_address = shop[x].deliveryAddress;
+        let ms_city = shop[x].city;
+        let ms_index = shop[x].index;
         let ms_street = shop[x].street;
         let ms_home = shop[x].home;
         let ms_room = shop[x].room;
         let ms_sumOrder = shop[x].sumOrder;
 
         //search counterparty
-        await axios.get(
+        axios.get(
             'https://online.moysklad.ru/api/remap/1.1/entity/counterparty?search='+ms_telephone,
         {
             headers: headers,
             auth: {username: ms_login,password: ms_pass}
-        }).then(async function(response) {
+        }).then(response => {
             if (response.data.rows.length > 0) {
                 var counterparty = response.data.rows[0].meta.href;
                 console.log('Найден контрагент '+counterparty);
-                await create_ms_order(ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, headers, ms_login, ms_pass, ms_delivery, ms_delivery_address);
-            } else{
+                create_ms_order({ ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, headers, ms_login, ms_pass, ms_delivery, ms_delivery_address, ms_city, ms_index });
+            } else {
                 console.log('Контрагент не найден. Будет создан новый!');
                 // if counterparty not exists
-                var createCounterPartyUrl = 'https://online.moysklad.ru/api/remap/1.1/entity/counterparty';
-                var data = {
-                "name": ms_fio,
-                "phone": ms_telephone,
-                "attributes": [
-                    {
-                    "id": "9d6ea88b-02aa-11e9-9ff4-3150002312fb",
-                    "name": "Ник в Instagram",
-                    "type": "string",
-                    "value": ms_nik
-                    }
-                ]
+                const createCounterPartyUrl = 'https://online.moysklad.ru/api/remap/1.1/entity/counterparty';
+                const data = {
+                    "name": ms_fio,
+                    "phone": ms_telephone,
+                    "attributes": [{
+                        "id": "9d6ea88b-02aa-11e9-9ff4-3150002312fb",
+                        "name": "Ник в Instagram",
+                        "type": "string",
+                        "value": ms_nik
+                    }]
                 }
-                await axios.post(createCounterPartyUrl, data, {
+
+                axios.post(createCounterPartyUrl, data, {
                     headers: headers,
-                    auth: {username: ms_login,password: ms_pass}
-                }).then(async function(response) {
+                    auth: { username: ms_login, password: ms_pass }
+                }).then(response => {
                     var counterparty = response.data.meta.href;
                     console.log('Добавлен новый контрагент '+counterparty);
-                    await create_ms_order(ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, headers, ms_login, ms_pass, ms_delivery, ms_delivery_address);
-                }).catch(function(error) {
-                    console.log(error);
+                    create_ms_order({ ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, headers, ms_login, ms_pass, ms_delivery, ms_delivery_address, ms_city, ms_index });
+                }).catch(e => {
+                    console.error(e);
                 });
             }
         
-        }).catch(function(error) {
-            console.log(error);
+        }).catch(e => {
+            console.error(e);
         });
     }
 
