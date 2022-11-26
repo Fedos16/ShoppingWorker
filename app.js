@@ -187,113 +187,143 @@ async function removeSession(id) {
 async function getGoogleData() {
     let GoogleSheets = mainFunctions.GoogleSheets;
 
+    const listException = [
+        'УЧАСТНИКИ ЧС',
+        'ОПЛАТА',
+        'Оплата тест'
+    ];
+
+    const numberForBatchGet = 70;
+
     const start = new Date();
 
     await GoogleSheets(async auth => {
+        try {
 
-        const id_table = '1HGsuKdWEIcYjqWib2a5ApI-txNtybNl8Z0oR6ZPR59U';
-    
-        const sheet = google.sheets({version: 'v4', auth});
-        const spreadsheet = await sheet.spreadsheets.get({ spreadsheetId: id_table });
-    
-        let sheets_arr = spreadsheet.data.sheets;
-        const sheets = [];
-        for (let row of sheets_arr) {
-            let name = row.properties.title;
-            if (name != "ОПЛАТА" && name != 'Оплата тест') {
-                sheets.push(`${name}!A2:H`);
-            }
-        }
-    
-        let sheets_data = await sheet.spreadsheets.values.batchGet({ 
-            spreadsheetId: id_table,
-            ranges: sheets
-        });
-    
-        let no_pays = [];
-    
-        let valueRanges = sheets_data.data.valueRanges;
-        for (let rw of valueRanges) {
+            const id_table = '1HGsuKdWEIcYjqWib2a5ApI-txNtybNl8Z0oR6ZPR59U';
+        
+            const sheet = google.sheets({ version: 'v4', auth });
+            const spreadsheet = await sheet.spreadsheets.get({ spreadsheetId: id_table });
+        
+            let sheets_arr = spreadsheet.data.sheets;
+            const sheets = [];
 
-            let name = rw.range.split("'")[1];
+            let index = 0;
+            for (let row of sheets_arr) {
+                let name = row.properties.title;
+                if (!listException.includes(name)) {
 
-            let values = rw.values;
-            if (!values) continue;
-            for (let row of values) {
-                let status = String(row[6]).toLowerCase();
-                
-                if (status == 'не оплачено') {
+                    const number = Math.trunc(index / numberForBatchGet);
 
-                    const nik = String(row[0]).toLowerCase();
-                    const amount = String(row[5]).replace(',', '.').replace(/ /g, '');
+                    if (sheets.length - 1 < number) sheets.push([]);
 
-                    no_pays.push({
-                        purchase: name,
-                        nik: nik,
-                        venCode: row[1],
-                        nameProduct: row[2],
-                        numberProduct: row[3],
-                        variantProduct: row[4],
-                        amount: amount,
-                        status: row[6],
-                        sumDelivery: 0
-                    })
+                    sheets[number].push(`${name}!A2:H`);
+
+                    index ++;
                 }
             }
-        }
-        console.log(`Данные из Google Sheets получены за: ${new Date() - start} ms`);
-    
-        let orders = await models.SheetData.find({ status: 'Не оплачено' });
-    
-        let start_n = new Date();
-    
-        let new_arr = [];
-        let remove_arr = [];
 
-        let arr_change = [];
+            const valueRanges = [];
 
-        for (let row of orders) {
-            let status = true;
-            for (let rw of no_pays) {
-                if (row.purchase == rw.purchase && row.nik == rw.nik && row.nameProduct == rw.nameProduct && row.venCode == rw.venCode) {
+            for (let arr of sheets) {
+                let sheets_data = await sheet.spreadsheets.values.batchGet({
+                    spreadsheetId: id_table,
+                    ranges: arr
+                });
 
-                    let num = row.numberProduct;
-                    let price = row.amount;
-                    let varian = row.variantProduct;
+                valueRanges.push(...sheets_data.data.valueRanges);
+            }
+        
+            let no_pays = [];
 
-                    if (num != rw.numberProduct || price != rw.amount || varian != rw.variantProduct) {
-                        arr_change.push({ _id: row._id, data: rw });
+            console.log(valueRanges);
+
+            return false;
+
+            for (let rw of valueRanges) {
+
+                let name = rw.range.split("'")[1];
+
+                let values = rw.values;
+                if (!values) continue;
+                for (let row of values) {
+                    let status = String(row[6]).toLowerCase();
+                    
+                    if (status == 'не оплачено') {
+
+                        const nik = String(row[0]).toLowerCase();
+                        const amount = String(row[5]).replace(',', '.').replace(/ /g, '');
+
+                        no_pays.push({
+                            purchase: name,
+                            nik: nik,
+                            venCode: row[1],
+                            nameProduct: row[2],
+                            numberProduct: row[3],
+                            variantProduct: row[4],
+                            amount: amount,
+                            status: row[6],
+                            sumDelivery: 0
+                        })
                     }
-
-                    status = false;
-                    break;
                 }
             }
-            if (status) remove_arr.push(row._id);
-        }
-    
-        for (let rw of no_pays) {
-            let status = true;
+            console.log(`Данные из Google Sheets получены за: ${new Date() - start} ms`);
+        
+            let orders = await models.SheetData.find({ status: 'Не оплачено' });
+        
+            let start_n = new Date();
+        
+            let new_arr = [];
+            let remove_arr = [];
+
+            let arr_change = [];
+
             for (let row of orders) {
-                if (row.purchase == rw.purchase && row.nik == rw.nik && row.nameProduct == rw.nameProduct) {
-                    status = false;
-                    break;
-                }
-            }
-            if (status) new_arr.push(rw);
-        }
-    
-        console.log(` -- Строки прочитаны за: ${new Date() - start_n} ms`);
-        console.log(`Массивы: Remove - ${remove_arr.length}, Add - ${new_arr.length}, CHANGE: ${arr_change.length}`);
+                let status = true;
+                for (let rw of no_pays) {
+                    if (row.purchase == rw.purchase && row.nik == rw.nik && row.nameProduct == rw.nameProduct && row.venCode == rw.venCode) {
 
-        for (let row of arr_change) {
-            await models.SheetData.findOneAndUpdate({ _id: row._id }, row.data);
+                        let num = row.numberProduct;
+                        let price = row.amount;
+                        let varian = row.variantProduct;
+
+                        if (num != rw.numberProduct || price != rw.amount || varian != rw.variantProduct) {
+                            arr_change.push({ _id: row._id, data: rw });
+                        }
+
+                        status = false;
+                        break;
+                    }
+                }
+                if (status) remove_arr.push(row._id);
+            }
+        
+            for (let rw of no_pays) {
+                let status = true;
+                for (let row of orders) {
+                    if (row.purchase == rw.purchase && row.nik == rw.nik && row.nameProduct == rw.nameProduct) {
+                        status = false;
+                        break;
+                    }
+                }
+                if (status) new_arr.push(rw);
+            }
+        
+            console.log(` -- Строки прочитаны за: ${new Date() - start_n} ms`);
+            console.log(`Массивы: Remove - ${remove_arr.length}, Add - ${new_arr.length}, CHANGE: ${arr_change.length}`);
+
+            for (let row of arr_change) {
+                await models.SheetData.findOneAndUpdate({ _id: row._id }, row.data);
+            }
+        
+            await models.SheetData.deleteMany({ _id: { $in: remove_arr } });
+            await models.SheetData.insertMany(new_arr);
+        
+            console.log(` -- Все операции обновления завершены за: ${new Date() - start} ms`);
+        } catch(e) {
+            console.error(e);
         }
-    
-        await models.SheetData.deleteMany({ _id: { $in: remove_arr } });
-        await models.SheetData.insertMany(new_arr);
-    
-        console.log(` -- Все операции обновления завершены за: ${new Date() - start} ms`);
     
     });
 }
@@ -604,7 +634,7 @@ async function setDataForGoogleAndMS() {
             }
 
         } catch(e) {
-            console.log(e);
+            console.error(e);
             console.log(` ----- ERROR: MY_ERROR`)
         }
     });

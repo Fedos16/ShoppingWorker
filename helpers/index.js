@@ -80,7 +80,7 @@ var RUB = (rubb) => {
     return Number(retRub);
 };
 // Функция авторизации в гугл
-var GoogleSheets = async (listMajors) => {
+const GoogleSheets = async (listMajors) => {
     // АВТОРИЗАЦИЯ В ГУГЛ ТАБЛИЦАХ И ЗАПРОС ДАННЫХ
     const SCOPES = ['https://www.googleapis.com/auth/spreadsheets'];
     const TOKEN_PATH = 'token.json';
