@@ -236,10 +236,6 @@ async function getGoogleData() {
         
             let no_pays = [];
 
-            console.log(valueRanges);
-
-            return false;
-
             for (let rw of valueRanges) {
 
                 let name = rw.range.split("'")[1];
