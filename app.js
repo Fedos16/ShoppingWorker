@@ -23,7 +23,7 @@ const options = {
 }
 mongoose.set('debug', !config.IS_PRODUCTION);
 mongoose.connection
-  .on('error', error => console.log(error))
+  .on('error', error => console.error(error))
   .on('close', () => console.log('Database connection closed.'))
   .once('open', async () => {
     const info = mongoose.connections[0];
@@ -48,7 +48,7 @@ async function sucPayment() {
     for (let row of data){
         let order = row.numOrder;
         let id = row._id;
-        let sberStatus = await axios.get(`https://securepayments.sberbank.ru/payment/rest/getOrderStatusExtended.do?userName=${login}&password=${pasw}&orderNumber=${order}`);
+        let sberStatus = await axios.get(`https://securecardpayment.ru/payment/rest/getOrderStatusExtended.do?userName=${login}&password=${pasw}&orderNumber=${order}`);
         if (sberStatus.data.orderStatus == 2){
             await models.Shop.findOneAndUpdate({_id: id}, {status: 'Оплачено - не записано'});
         } else {
@@ -147,7 +147,7 @@ async function removeSession(id) {
     let status = true;
     MongoClient.connect(urlMongo, async (err, client) => {
         if (err) {
-            console.log(err);
+            console.error(err);
             status = false;
         }
 
@@ -264,7 +264,7 @@ async function getGoogleData() {
                     }
                 }
             }
-            console.log(`Данные из Google Sheets получены за: ${new Date() - start} ms`);
+            console.log(`Data from Google Sheets upload in: ${new Date() - start} ms`);
         
             let orders = await models.SheetData.find({ status: 'Не оплачено' });
         
@@ -306,8 +306,8 @@ async function getGoogleData() {
                 if (status) new_arr.push(rw);
             }
         
-            console.log(` -- Строки прочитаны за: ${new Date() - start_n} ms`);
-            console.log(`Массивы: Remove - ${remove_arr.length}, Add - ${new_arr.length}, CHANGE: ${arr_change.length}`);
+            console.log(` -- Rows read in: ${new Date() - start_n} ms`);
+            console.log(`Arrays: Remove - ${remove_arr.length}, Add - ${new_arr.length}, CHANGE: ${arr_change.length}`);
 
             for (let row of arr_change) {
                 await models.SheetData.findOneAndUpdate({ _id: row._id }, row.data);
@@ -316,7 +316,7 @@ async function getGoogleData() {
             await models.SheetData.deleteMany({ _id: { $in: remove_arr } });
             await models.SheetData.insertMany(new_arr);
         
-            console.log(` -- Все операции обновления завершены за: ${new Date() - start} ms`);
+            console.log(` -- Update completed in: ${new Date() - start} ms`);
         } catch(e) {
             console.error(e);
         }
@@ -334,7 +334,7 @@ async function setDataForGoogleAndMS() {
         }).then(response => {
     
             if (response.data.rows.length > 0) {
-                console.log('Заказ №'+ms_numOrder+' уже существует!');
+                console.log('Order №'+ms_numOrder+' is exist!');
             } else {
                 // generate positions
                 setTimeout(async function() {
@@ -381,9 +381,6 @@ async function setDataForGoogleAndMS() {
 
                             if(response.data.rows.length > 0) {
                                 //this.product_href = response.data.rows[0].meta.href;
-                                //console.log(response.data.rows[0].meta.href);
-                                //console.log(col);
-                                //console.log(price);
                                 positions.push({
                                     "quantity": col,
                                     "price": (price*100)/col,
@@ -445,10 +442,8 @@ async function setDataForGoogleAndMS() {
                         auth: {username: ms_login,password: ms_pass}
                     }).then(response => {
 
-                        console.log('Новый заказ №'+ms_numOrder+' успешно создан!');
+                        console.log('New order №'+ms_numOrder+' created!');
                         var order_ms_id = response.data.id;
-                        //console.log(ms_idProduct[ms_purchase].col);
-                        //console.log(ms_idProduct[ms_purchase].price);
                         // create payment in moysklad
                         var createPaymentUrl = 'https://online.moysklad.ru/api/remap/1.1/entity/paymentin';
                         var payment_data = {
@@ -571,10 +566,10 @@ async function setDataForGoogleAndMS() {
         }).then(response => {
             if (response.data.rows.length > 0) {
                 var counterparty = response.data.rows[0].meta.href;
-                console.log('Найден контрагент '+counterparty);
+                console.log('Client finded '+counterparty);
                 create_ms_order({ ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, headers, ms_login, ms_pass, ms_delivery, ms_delivery_address, ms_city, ms_index });
             } else {
-                console.log('Контрагент не найден. Будет создан новый!');
+                console.log('Client not found. New Client!');
                 // if counterparty not exists
                 const createCounterPartyUrl = 'https://online.moysklad.ru/api/remap/1.1/entity/counterparty';
                 const data = {
@@ -593,7 +588,7 @@ async function setDataForGoogleAndMS() {
                     auth: { username: ms_login, password: ms_pass }
                 }).then(response => {
                     var counterparty = response.data.meta.href;
-                    console.log('Добавлен новый контрагент '+counterparty);
+                    console.log('New Client added '+counterparty);
                     create_ms_order({ ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, headers, ms_login, ms_pass, ms_delivery, ms_delivery_address, ms_city, ms_index });
                 }).catch(e => {
                     console.error(e);
@@ -626,12 +621,11 @@ async function setDataForGoogleAndMS() {
                 await models.Shop.updateMany({_id: { $in: ids }}, {status: 'Оплачено - записано'});
 
             } else {
-                console.log('Нет данных для записи!');
+                console.log('Not data for write');
             }
 
         } catch(e) {
             console.error(e);
-            console.log(` ----- ERROR: MY_ERROR`)
         }
     });
 }
