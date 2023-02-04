@@ -324,7 +324,7 @@ async function getGoogleData() {
     });
 }
 async function setDataForGoogleAndMS() {
-    function create_ms_order({ ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, headers, ms_login, ms_pass, ms_delivery, ms_delivery_address, ms_city, ms_index }) {
+    function create_ms_order({ _id, ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, headers, ms_login, ms_pass, ms_delivery, ms_delivery_address, ms_city, ms_index }) {
         // search order in moysklad
         axios.get(
             'https://online.moysklad.ru/api/remap/1.1/entity/customerorder?filter=name='+ms_numOrder,
@@ -480,14 +480,13 @@ async function setDataForGoogleAndMS() {
                         axios.post(createPaymentUrl, payment_data, {
                             headers: headers,
                             auth: {username: ms_login,password: ms_pass}
-                        }).then(response => {
-                            //generatePositions(ms_idProduct, ms_purchase, headers, ms_login, ms_pass, order_ms_id);
+                        }).then(async () => {
+
+                            await models.Shop.findOneAndUpdate({ _id }, { 'serviceStatus.mySklad': true });
+                            
                         }).catch(e => {
                             console.error(e);
                         });
-    
-                        //var already_query = [];
-    
                     
                     }).catch(e => {
                         console.error(e);
@@ -504,13 +503,15 @@ async function setDataForGoogleAndMS() {
 
     const now = new Date();
 
+    const dateStart = new Date(2023, 1, 4);
+
     await sucPayment();
 
     // Формируем список заказов
     let values = [];
     let ids = [];
 
-    let shop = await models.Shop.find({status: 'Оплачено - не записано'});
+    let shop = await models.Shop.find({ $or: [{ status: 'Оплачено - не записано' }, { createdAt: { $gte: dateStart }, 'serviceStatus.mySklad': false }] }).lean();
     for (let row of shop) {
         ids.push(row._id);
         values.push([
@@ -533,7 +534,6 @@ async function setDataForGoogleAndMS() {
         ]);
     }
     for (let x = 0; x < ids.length; x++){
-        console.log('ID - ' + ids[x]);
 
         // moysklad auth
         const headers = {
@@ -557,6 +557,10 @@ async function setDataForGoogleAndMS() {
         let ms_room = shop[x].room;
         let ms_sumOrder = shop[x].sumOrder;
 
+        const _id = ids[x];
+
+        console.log(`Закупка: ${ms_purchase}, ID: ${_id}`);
+
         //search counterparty
         axios.get(
             'https://online.moysklad.ru/api/remap/1.1/entity/counterparty?search='+ms_telephone,
@@ -567,7 +571,7 @@ async function setDataForGoogleAndMS() {
             if (response.data.rows.length > 0) {
                 var counterparty = response.data.rows[0].meta.href;
                 console.log('Client finded '+counterparty);
-                create_ms_order({ ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, headers, ms_login, ms_pass, ms_delivery, ms_delivery_address, ms_city, ms_index });
+                create_ms_order({ _id, ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, headers, ms_login, ms_pass, ms_delivery, ms_delivery_address, ms_city, ms_index });
             } else {
                 console.log('Client not found. New Client!');
                 // if counterparty not exists
@@ -589,7 +593,7 @@ async function setDataForGoogleAndMS() {
                 }).then(response => {
                     var counterparty = response.data.meta.href;
                     console.log('New Client added '+counterparty);
-                    create_ms_order({ ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, headers, ms_login, ms_pass, ms_delivery, ms_delivery_address, ms_city, ms_index });
+                    create_ms_order({ _id, ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, headers, ms_login, ms_pass, ms_delivery, ms_delivery_address, ms_city, ms_index });
                 }).catch(e => {
                     console.error(e);
                 });
