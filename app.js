@@ -12,6 +12,13 @@ const config = require('./config');
 const models = require('./models');
 const mainFunctions = require('./helpers/index');
 
+const axiosParamsForMS = {
+    headers: {
+        'Content-Type': 'application/json',
+    },
+    auth: { username: config.MS_LOGIN, password: config.MS_PASSWORD }
+}
+
 // database
 mongoose.Promise = global.Promise;
 const options = {
@@ -43,14 +50,14 @@ async function sucPayment() {
 
     let login = config.LOGIN_SBER;
     let pasw = config.PASSWORD_SBER;
-    let data = await models.Shop.find({status: 'Регистрация оплаты'});
+    let data = await models.Shop.find({ status: 'Регистрация оплаты' }).lean();
 
     for (let row of data){
         let order = row.numOrder;
         let id = row._id;
         let sberStatus = await axios.get(`https://securecardpayment.ru/payment/rest/getOrderStatusExtended.do?userName=${login}&password=${pasw}&orderNumber=${order}`);
         if (sberStatus.data.orderStatus == 2){
-            await models.Shop.findOneAndUpdate({_id: id}, {status: 'Оплачено - не записано'});
+            await models.Shop.findOneAndUpdate({ _id: id }, { status: 'Оплачено - не записано', 'serviceStatus.payment': true });
         } else {
             if ('orderStatus' in sberStatus.data) {
                 if (sberStatus.data.orderStatus == 6) {
@@ -324,69 +331,52 @@ async function getGoogleData() {
     });
 }
 async function setDataForGoogleAndMS() {
-    function create_ms_order({ _id, ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, headers, ms_login, ms_pass, ms_delivery, ms_delivery_address, ms_city, ms_index }) {
-        // search order in moysklad
-        axios.get(
-            'https://online.moysklad.ru/api/remap/1.1/entity/customerorder?filter=name='+ms_numOrder,
-        {
-            headers: headers,
-            auth: {username: ms_login,password: ms_pass}
-        }).then(response => {
-    
-            if (response.data.rows.length > 0) {
+    async function create_ms_order({ _id, ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, ms_delivery, ms_delivery_address, ms_city, ms_index }) {
+        try {
+            // search order in moysklad
+            const res = await axios.get(`${config.MS_URL}/customerorder?filter=name=${ms_numOrder}`, axiosParamsForMS)
+            if (res.data.rows.length) {
                 console.log('Order №'+ms_numOrder+' is exist!');
             } else {
                 // generate positions
                 setTimeout(async function() {
-                    var positions = [];
-                    for (var i = 0; i < ms_idProduct[ms_purchase].length; i++) {
-                    
-                        var col = parseInt(ms_idProduct[ms_purchase][i].col);
-                        var price = parseInt(ms_idProduct[ms_purchase][i].price);
 
-                        if (col == null) var col = 1;
+                    const positions = [];
+                    const products = ms_idProduct[ms_purchase];
 
-                        var variant = ms_idProduct[ms_purchase][i].variant;
+                    for (let row of products) {
+                        const col = parseInt(row.col) || 1;
+                        const price = parseInt(row.price);
+                        const variant = row.variant;
 
-                        console.log(` --- VARIANT: ${variant}`);
-
-                        if (variant != null && variant != '') {
-                            var response = await axios.get(
-                                'https://online.moysklad.ru/api/remap/1.1/entity/variant/'+encodeURIComponent(variant),
-                            {
-                                headers: headers,
-                                auth: {username: ms_login,password: ms_pass}
-                            });
-                            if (response.data.meta.href) {
+                        if (variant) {
+                            const res = await axios.get(`${config.MS_URL}/variant/${encodeURIComponent(variant)}`, axiosParamsForMS);
+                            const href = res?.data?.meta?.href;
+                            if (href) {
                                 positions.push({
                                     "quantity": col,
-                                    "price": (price*100)/col,
+                                    "price": (price * 100) / col,
                                     "assortment": {
                                         "meta": {
-                                        "href": response.data.meta.href,
-                                        "metadataHref": "https://online.moysklad.ru/api/remap/1.1/entity/variant/metadata",
-                                        "type": "variant",
-                                        "mediaType": "application/json"
+                                            "href": href,
+                                            "metadataHref": "https://online.moysklad.ru/api/remap/1.1/entity/variant/metadata",
+                                            "type": "variant",
+                                            "mediaType": "application/json"
                                         }
                                     }
                                 });
                             }
-                        } else{
-                            var response = await axios.get(
-                                'https://online.moysklad.ru/api/remap/1.1/entity/product?search='+encodeURIComponent(ms_idProduct[ms_purchase][i].art),
-                            {
-                                headers: headers,
-                                auth: {username: ms_login,password: ms_pass}
-                            });
+                        } else {
+                            const art = row.art;
+                            const res = await axios.get(`${config.MS_URL}/product?search=${encodeURIComponent(art)}`, axiosParamsForMS);
 
-                            if(response.data.rows.length > 0) {
-                                //this.product_href = response.data.rows[0].meta.href;
+                            if(res.data.rows.length) {
                                 positions.push({
                                     "quantity": col,
                                     "price": (price*100)/col,
                                     "assortment": {
                                         "meta": {
-                                            "href": response.data.rows[0].meta.href,
+                                            "href": res.data.rows[0].meta.href,
                                             "metadataHref": "https://online.moysklad.ru/api/remap/1.1/entity/product/metadata",
                                             "type": "product",
                                             "mediaType": "application/json"
@@ -396,14 +386,14 @@ async function setDataForGoogleAndMS() {
                                 
                             }
                         }
+
                     }
 
                     let description = `${ms_delivery} ${ms_index} ${ms_city} ${ms_delivery_address} ${ms_street} ${ms_home} ${ms_room}`;
                     if (!ms_index) description = `${ms_delivery} ${ms_delivery_address} ${ms_street} ${ms_home} ${ms_room}`;
     
                     // create order in moysklad
-                    var createOrderUrl = 'https://online.moysklad.ru/api/remap/1.1/entity/customerorder';
-                    var data = {
+                    const data = {
                         "name": ms_numOrder,
                         "organization": {
                             "meta": {
@@ -437,145 +427,103 @@ async function setDataForGoogleAndMS() {
                         "description": description
                     }
 
-                    axios.post(createOrderUrl, data, {
-                        headers: headers,
-                        auth: {username: ms_login,password: ms_pass}
-                    }).then(response => {
+                    const res = await axios.post(`${config.MS_URL}/customerorder`, data, axiosParamsForMS);
 
-                        console.log('New order №'+ms_numOrder+' created!');
-                        var order_ms_id = response.data.id;
-                        // create payment in moysklad
-                        var createPaymentUrl = 'https://online.moysklad.ru/api/remap/1.1/entity/paymentin';
-                        var payment_data = {
-                            "name": ms_numOrder,
-                            "organization": {
+                    console.log('New order №'+ms_numOrder+' created!');
+                    // create payment in moysklad
+                    var createPaymentUrl = 'https://online.moysklad.ru/api/remap/1.1/entity/paymentin';
+                    const payment_data = {
+                        "name": ms_numOrder,
+                        "organization": {
+                            "meta": {
+                                "href": "https://online.moysklad.ru/api/remap/1.1/entity/organization/5ef13089-5c69-11ea-0a80-03c20005831c",
+                                "metadataHref": "https://online.moysklad.ru/api/remap/1.1/entity/organization/metadata",
+                                "type": "organization",
+                                "mediaType": "application/json"
+                            }
+                        },
+                        "agent": {
+                            "meta": {
+                                "href": counterparty,
+                                "metadataHref": "https://online.moysklad.ru/api/remap/1.1/entity/counterparty/metadata",
+                                "type": "counterparty",
+                                "mediaType": "application/json"
+                            }
+                        },
+                        "sum": parseInt(ms_sumOrder) * 100,
+                        "vatSum": parseInt(ms_sumOrder) * 100,
+                        "operations": [
+                            {
                                 "meta": {
-                                    "href": "https://online.moysklad.ru/api/remap/1.1/entity/organization/5ef13089-5c69-11ea-0a80-03c20005831c",
-                                    "metadataHref": "https://online.moysklad.ru/api/remap/1.1/entity/organization/metadata",
-                                    "type": "organization",
-                                    "mediaType": "application/json"
-                                }
+                                "href": res.data.meta.href,
+                                "type": "customerOrder"
                             },
-                            "agent": {
-                                "meta": {
-                                    "href": counterparty,
-                                    "metadataHref": "https://online.moysklad.ru/api/remap/1.1/entity/counterparty/metadata",
-                                    "type": "counterparty",
-                                    "mediaType": "application/json"
-                                }
-                            },
-                            "sum": parseInt(ms_sumOrder)*100,
-                            "vatSum": parseInt(ms_sumOrder)*100,
-                            "operations": [
-                                {
-                                    "meta": {
-                                    "href": response.data.meta.href,
-                                    "type": "customerOrder"
-                                },
-                                    "linkedSum": parseInt(ms_sumOrder)*100
-                                }
-                            ]
-                        }
+                                "linkedSum": parseInt(ms_sumOrder) * 100
+                            }
+                        ]
+                    }
 
-                        axios.post(createPaymentUrl, payment_data, {
-                            headers: headers,
-                            auth: {username: ms_login,password: ms_pass}
-                        }).then(async () => {
-
-                            await models.Shop.findOneAndUpdate({ _id }, { 'serviceStatus.mySklad': true });
-                            
-                        }).catch(e => {
-                            console.error(e);
-                        });
-                    
-                    }).catch(e => {
-                        console.error(e);
-                    });
+                    await axios.post(`${config.MS_URL}/paymentin`, payment_data, axiosParamsForMS);
+                    await models.Shop.findOneAndUpdate({ _id }, { 'serviceStatus.mySklad': true });
 
                 }, 3000);
             }
-        }).catch(e => {
-            console.error(e);
-        });
-    }
-
-    let GoogleSheets = mainFunctions.GoogleSheets;
-
-    const now = new Date();
-
-    const dateStart = new Date(2023, 1, 4);
-
-    await sucPayment();
-
-    // Формируем список заказов
-    let values = [];
-    let ids = [];
-
-    let shop = await models.Shop.find({ $or: [{ status: 'Оплачено - не записано' }, { createdAt: { $gte: dateStart }, 'serviceStatus.mySklad': false }] }).lean();
-    for (let row of shop) {
-        ids.push(row._id);
-        values.push([
-            row.purchase,
-            row.nik,
-            row.telephone,
-            row.fio,
-            row.city,
-            row.index,
-            row.street,
-            row.home,
-            row.room,
-            row.delivery,
-            row.deliveryAddress,
-            row.comment,
-            row.numOrder,
-            row.sumOrder,
-            row.sumDelivery,
-            row.summ
-        ]);
-    }
-    for (let x = 0; x < ids.length; x++){
-
-        // moysklad auth
-        const headers = {
-            'Content-Type': 'application/json',
+        } catch(e) {
+            throw e;
         }
+    }
 
-        const ms_login = 'Admin@9645054848';
-        const ms_pass = 'marmar3587133mar';
-        let ms_telephone = shop[x].telephone;
-        let ms_fio = shop[x].fio;
-        let ms_nik = String(shop[x].nik).toLowerCase();
-        let ms_numOrder = shop[x].numOrder;
-        let ms_idProduct = shop[x].idProduct;
-        let ms_purchase = shop[x].purchase;
-        let ms_delivery = shop[x].delivery;
-        let ms_delivery_address = shop[x].deliveryAddress;
-        let ms_city = shop[x].city;
-        let ms_index = shop[x].index;
-        let ms_street = shop[x].street;
-        let ms_home = shop[x].home;
-        let ms_room = shop[x].room;
-        let ms_sumOrder = shop[x].sumOrder;
+    try {
 
-        const _id = ids[x];
+        let GoogleSheets = mainFunctions.GoogleSheets;
 
-        console.log(`Закупка: ${ms_purchase}, ID: ${_id}`);
+        const dateStart = new Date(2023, 1, 4);
 
-        //search counterparty
-        axios.get(
-            'https://online.moysklad.ru/api/remap/1.1/entity/counterparty?search='+ms_telephone,
-        {
-            headers: headers,
-            auth: {username: ms_login,password: ms_pass}
-        }).then(response => {
-            if (response.data.rows.length > 0) {
-                var counterparty = response.data.rows[0].meta.href;
-                console.log('Client finded '+counterparty);
-                create_ms_order({ _id, ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, headers, ms_login, ms_pass, ms_delivery, ms_delivery_address, ms_city, ms_index });
+        await sucPayment();
+
+        // Формируем список заказов
+        let values = [];
+        let ids = [];
+
+        let shop = await models.Shop.find({ 
+            $or: [
+                { status: 'Оплачено - не записано' }, 
+                { status: 'Оплачено - записано', createdAt: { $gte: dateStart }, 'serviceStatus.mySklad': false }
+            ] 
+        }).lean();
+        
+        for (let row of shop) {
+            const { 
+                _id,
+                telephone: ms_telephone, 
+                fio: ms_fio, 
+                nik: ms_nik, 
+                numOrder: ms_numOrder, 
+                idProduct: ms_idProduct,
+                purchase: ms_purchase,
+                delivery: ms_delivery,
+                deliveryAddress: ms_delivery_address,
+                city: ms_city,
+                index: ms_index,
+                street: ms_street,
+                home: ms_home,
+                room: ms_room,
+                sumOrder: ms_sumOrder,
+            } = row;
+
+            console.log(`Purchase: ${ms_purchase}, ID: ${_id}`);
+
+            // search Counterparty
+            const res = await axios.get(`${config.MS_URL}/counterparty?search=${ms_telephone}`, axiosParamsForMS);
+            if (res.data.rows.length) {
+                const counterparty = res.data.rows[0].meta.href;
+
+                console.log('Client finded', counterparty);
+
+                await create_ms_order({ _id, ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, ms_delivery, ms_delivery_address, ms_city, ms_index });
             } else {
                 console.log('Client not found. New Client!');
-                // if counterparty not exists
-                const createCounterPartyUrl = 'https://online.moysklad.ru/api/remap/1.1/entity/counterparty';
+
                 const data = {
                     "name": ms_fio,
                     "phone": ms_telephone,
@@ -587,51 +535,50 @@ async function setDataForGoogleAndMS() {
                     }]
                 }
 
-                axios.post(createCounterPartyUrl, data, {
-                    headers: headers,
-                    auth: { username: ms_login, password: ms_pass }
-                }).then(response => {
-                    var counterparty = response.data.meta.href;
-                    console.log('New Client added '+counterparty);
-                    create_ms_order({ _id, ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, headers, ms_login, ms_pass, ms_delivery, ms_delivery_address, ms_city, ms_index });
-                }).catch(e => {
-                    console.error(e);
-                });
+                const res = await axios.post(`${config.MS_URL}/counterparty`, data, axiosParamsForMS);
+                const counterparty = res.data.meta.href;
+
+                console.log('New Client added', counterparty);
+
+                await create_ms_order({ _id, ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, ms_delivery, ms_delivery_address, ms_city, ms_index });
             }
-        
-        }).catch(e => {
-            console.error(e);
+        }
+
+        await GoogleSheets(async auth => {
+            try {
+                const sheets = google.sheets({version: 'v4', auth});
+
+                if (shop.length > 0) {
+
+                    const resource = {
+                        values,
+                    };
+                    
+                    sheets.spreadsheets.values.append({
+                        spreadsheetId: '1HGsuKdWEIcYjqWib2a5ApI-txNtybNl8Z0oR6ZPR59U',
+                        range: `ОПЛАТА!A:P`,
+                        valueInputOption: 'RAW',
+                        resource
+                    });
+
+                    await models.Shop.updateMany({_id: { $in: ids }}, {status: 'Оплачено - записано'});
+
+                } else {
+                    console.log('Not data for write');
+                }
+
+            } catch(e) {
+                console.error(e);
+            }
         });
-    }
 
-
-    await GoogleSheets(async auth => {
-        try {
-            const sheets = google.sheets({version: 'v4', auth});
-
-            if (shop.length > 0) {
-
-                const resource = {
-                    values,
-                };
-                
-                sheets.spreadsheets.values.append({
-                    spreadsheetId: '1HGsuKdWEIcYjqWib2a5ApI-txNtybNl8Z0oR6ZPR59U',
-                    range: `ОПЛАТА!A:P`,
-                    valueInputOption: 'RAW',
-                    resource
-                });
-
-                await models.Shop.updateMany({_id: { $in: ids }}, {status: 'Оплачено - записано'});
-
-            } else {
-                console.log('Not data for write');
-            }
-
-        } catch(e) {
+    } catch(e) {
+        if (e?.data?.errors) {
+            console.error(e.data.errors[0].error)
+        } else {
             console.error(e);
         }
-    });
+    }
 }
 
 // Забираем данные из гугла по статусу оплаты ...
@@ -650,6 +597,9 @@ cron.schedule('* * * * *', async () => {
     }
 });
 
-app.listen(config.PORT, () =>
+app.listen(config.PORT, async () => {
   console.log(`Example app listening on port ${config.PORT}!`)
-);
+
+  await setDataForGoogleAndMS();
+
+});

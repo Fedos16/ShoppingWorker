@@ -14,6 +14,7 @@ module.exports = {
   GMAIL_PASSWORD: process.env.GMAIL_PASSWORD,
   MS_LOGIN: process.env.MS_LOGIN,
   MS_PASSWORD: process.env.MS_PASSWORD,
+  MS_URL: process.env.MS_URL,
   LOGIN_SBER: process.env.LOGIN_SBER,
   PASSWORD_SBER: process.env.PASSWORD_SBER,
   TOKEN_SBER: process.env.TOKEN_SBER,

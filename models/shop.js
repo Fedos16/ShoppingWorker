@@ -56,6 +56,11 @@ const schema = new Schema(
     },
     idProduct: {
         type: Object
+    },
+    serviceStatus: {
+        mySklad: { type: Boolean, default: false },
+        googleSheets: { type: Boolean, default: false },
+        payment: { type: Boolean, default: false }
     }
   },
   {
