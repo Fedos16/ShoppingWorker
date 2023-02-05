@@ -516,6 +516,8 @@ async function setDataForGoogleAndMS() {
                 row.summ
             ]);
 
+            ids.push(row._id);
+
             const { 
                 _id,
                 telephone: ms_telephone, 
@@ -584,7 +586,7 @@ async function setDataForGoogleAndMS() {
                         resource
                     });
 
-                    await models.Shop.updateMany({_id: { $in: ids }}, {status: 'Оплачено - записано'});
+                    await models.Shop.updateMany({_id: { $in: ids }}, { status: 'Оплачено - записано', 'serviceStatus.googleSheets': true });
 
                 } else {
                     console.log('Not data for write');
