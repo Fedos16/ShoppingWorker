@@ -337,6 +337,9 @@ async function setDataForGoogleAndMS() {
             const res = await axios.get(`${config.MS_URL}/customerorder?filter=name=${ms_numOrder}`, axiosParamsForMS)
             if (res.data.rows.length) {
                 console.log('Order №'+ms_numOrder+' is exist!');
+
+                await models.Shop.findOneAndUpdate({ _id }, { 'serviceStatus.mySklad': true });
+
             } else {
                 // generate positions
                 setTimeout(async function() {
@@ -493,6 +496,26 @@ async function setDataForGoogleAndMS() {
         }).lean();
         
         for (let row of shop) {
+
+            values.push([
+                row.purchase,
+                row.nik,
+                row.telephone,
+                row.fio,
+                row.city,
+                row.index,
+                row.street,
+                row.home,
+                row.room,
+                row.delivery,
+                row.deliveryAddress,
+                row.comment,
+                row.numOrder,
+                row.sumOrder,
+                row.sumDelivery,
+                row.summ
+            ]);
+
             const { 
                 _id,
                 telephone: ms_telephone, 
@@ -599,7 +622,4 @@ cron.schedule('* * * * *', async () => {
 
 app.listen(config.PORT, async () => {
   console.log(`Example app listening on port ${config.PORT}!`)
-
-  await setDataForGoogleAndMS();
-
 });
