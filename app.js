@@ -51,7 +51,7 @@ async function sucPayment() {
 
     let login = config.LOGIN_SBER;
     let pasw = config.PASSWORD_SBER;
-    let data = await models.Shop.find({ status: 'Регистрация оплаты' }).lean();
+    let data = await models.Shop.find({ status: { $in: ['Регистрация оплаты', 'Авторизация отклонена'] } }).lean();
 
     for (let row of data){
         let order = row.numOrder;
