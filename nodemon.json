@@ -3,10 +3,10 @@
     "env": {
       "NODE_ENV": "development",
       "PORT": 4000,
-      "MONGO_URL": "mongodb://localhost:27017/shopping",
+      "MONGO_URL": "mongodb+srv://fedos:asser220@shopping.uk8tq.mongodb.net/shopping?retryWrites=true&w=majority",
       "MS_LOGIN": "Admin@9645054848",
       "MS_PASSWORD": "marmar3587133mar",
-      "MS_URL": "https://online.moysklad.ru/api/remap/1.1/entity",
+      "MS_URL": "https://api.moysklad.ru/api/remap/1.2/entity",
       "LOGIN_SBER": "marusik-11001-api",
       "PASSWORD_SBER": "xZtA79hBB",
       "TOKEN_SBER": "vqo693o0vkivb1719k2r81cq3",

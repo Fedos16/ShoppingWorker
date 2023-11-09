@@ -157,10 +157,10 @@ async function newClientForMySklad(info) {
     tel = tel.replace(/\D/g, '');
     tel = String(tel).substring(1);
 
-    let url = `https://online.moysklad.ru/api/remap/1.2/entity/counterparty?search=${tel}`;
+    let url = `${config.MS_URL}/counterparty?search=${tel}`;
     let request = await setRequestForMySklad(url);
     if (request.rows.length == 0) {
-        let createCounterPartyUrl = 'https://online.moysklad.ru/api/remap/1.1/entity/counterparty';
+        let createCounterPartyUrl = `${config.MS_URL}/counterparty`;
         let data = {
             "name": info.fio,
             "phone": info.tel,

@@ -15,6 +15,7 @@ const mainFunctions = require('./helpers/index');
 const axiosParamsForMS = {
     headers: {
         'Content-Type': 'application/json',
+        'Accept-Encoding': 'gzip',
     },
     auth: { username: config.MS_LOGIN, password: config.MS_PASSWORD }
 }
@@ -352,22 +353,28 @@ async function setDataForGoogleAndMS() {
                         const price = parseInt(row.price);
                         const variant = row.variant;
 
-                        if (variant) {
-                            const res = await axios.get(`${config.MS_URL}/variant/${encodeURIComponent(variant)}`, axiosParamsForMS);
-                            const href = res?.data?.meta?.href;
-                            if (href) {
-                                positions.push({
-                                    "quantity": col,
-                                    "price": (price * 100) / col,
-                                    "assortment": {
-                                        "meta": {
-                                            "href": href,
-                                            "metadataHref": "https://online.moysklad.ru/api/remap/1.1/entity/variant/metadata",
-                                            "type": "variant",
-                                            "mediaType": "application/json"
+                        if (variant && variant.length > 10) {
+
+                            console.log('ID FOR VARIANT:', _id);
+                            try {
+                                const res = await axios.get(`${config.MS_URL}/variant/${encodeURIComponent(variant)}`, axiosParamsForMS);
+                                const href = res?.data?.meta?.href;
+                                if (href) {
+                                    positions.push({
+                                        "quantity": col,
+                                        "price": (price * 100) / col,
+                                        "assortment": {
+                                            "meta": {
+                                                "href": href,
+                                                "metadataHref": `${config.MS_URL}/variant/metadata`,
+                                                "type": "variant",
+                                                "mediaType": "application/json"
+                                            }
                                         }
-                                    }
-                                });
+                                    });
+                                }
+                            } catch(e) {
+                                console.log('VARIANT NOT FOUND');
                             }
                         } else {
                             const art = row.art;
@@ -380,7 +387,7 @@ async function setDataForGoogleAndMS() {
                                     "assortment": {
                                         "meta": {
                                             "href": res.data.rows[0].meta.href,
-                                            "metadataHref": "https://online.moysklad.ru/api/remap/1.1/entity/product/metadata",
+                                            "metadataHref": `${config.MS_URL}/product/metadata`,
                                             "type": "product",
                                             "mediaType": "application/json"
                                         }
@@ -400,7 +407,7 @@ async function setDataForGoogleAndMS() {
                         "name": ms_numOrder,
                         "organization": {
                             "meta": {
-                                "href": "https://online.moysklad.ru/api/remap/1.1/entity/organization/5ef13089-5c69-11ea-0a80-03c20005831c",
+                                "href": `${config.MS_URL}/organization/5ef13089-5c69-11ea-0a80-03c20005831c`,
                                 "type": "organization",
                                 "mediaType": "application/json"
                             }
@@ -414,14 +421,14 @@ async function setDataForGoogleAndMS() {
                         },
                         "store": {
                             "meta": {
-                                "href": "https://online.moysklad.ru/api/remap/1.1/entity/store/6d334937-71e7-11ec-0a80-09e500a6b0fd",
+                                "href": `${config.MS_URL}/store/6d334937-71e7-11ec-0a80-09e500a6b0fd`,
                                 "type": "store",
                                 "mediaType": "application/json"
                             }
                         },
                         "state": {
                             "meta": {
-                            "href": "https://online.moysklad.ru/api/remap/1.1/entity/customerorder/metadata/states/dd8bc62a-caef-11e8-9109-f8fc0033f16c",
+                            "href": `${config.MS_URL}/customerorder/metadata/states/dd8bc62a-caef-11e8-9109-f8fc0033f16c`,
                             "type": "state",
                             "mediaType": "application/json"
                             }
@@ -434,13 +441,12 @@ async function setDataForGoogleAndMS() {
 
                     console.log('New order №'+ms_numOrder+' created!');
                     // create payment in moysklad
-                    var createPaymentUrl = 'https://online.moysklad.ru/api/remap/1.1/entity/paymentin';
                     const payment_data = {
                         "name": ms_numOrder,
                         "organization": {
                             "meta": {
-                                "href": "https://online.moysklad.ru/api/remap/1.1/entity/organization/5ef13089-5c69-11ea-0a80-03c20005831c",
-                                "metadataHref": "https://online.moysklad.ru/api/remap/1.1/entity/organization/metadata",
+                                "href": `${config.MS_URL}/organization/5ef13089-5c69-11ea-0a80-03c20005831c`,
+                                "metadataHref": `${config.MS_URL}/organization/metadata`,
                                 "type": "organization",
                                 "mediaType": "application/json"
                             }
@@ -448,7 +454,7 @@ async function setDataForGoogleAndMS() {
                         "agent": {
                             "meta": {
                                 "href": counterparty,
-                                "metadataHref": "https://online.moysklad.ru/api/remap/1.1/entity/counterparty/metadata",
+                                "metadataHref": `${config.MS_URL}/counterparty/metadata`,
                                 "type": "counterparty",
                                 "mediaType": "application/json"
                             }
@@ -458,9 +464,9 @@ async function setDataForGoogleAndMS() {
                         "operations": [
                             {
                                 "meta": {
-                                "href": res.data.meta.href,
-                                "type": "customerOrder"
-                            },
+                                    "href": res.data.meta.href,
+                                    "type": "customerorder"
+                                },
                                 "linkedSum": parseInt(ms_sumOrder) * 100
                             }
                         ]
@@ -516,8 +522,6 @@ async function setDataForGoogleAndMS() {
                 row.summ
             ]);
 
-            ids.push(row._id);
-
             const { 
                 _id,
                 telephone: ms_telephone, 
@@ -534,12 +538,18 @@ async function setDataForGoogleAndMS() {
                 home: ms_home,
                 room: ms_room,
                 sumOrder: ms_sumOrder,
+                serviceStatus: {
+                    googleSheets: isWriteGoogleSheet
+                }
             } = row;
+
+            if (!isWriteGoogleSheet) ids.push(row._id);
 
             console.log(`Purchase: ${ms_purchase}, ID: ${_id}`);
 
             // search Counterparty
-            const res = await axios.get(`${config.MS_URL}/counterparty?search=${ms_telephone}`, axiosParamsForMS);
+            const tel = String(ms_telephone).replace(/\D/g, '');
+            const res = await axios.get(`${config.MS_URL}/counterparty?search=${tel}`, axiosParamsForMS);
             if (res.data.rows.length) {
                 const counterparty = res.data.rows[0].meta.href;
 
@@ -611,17 +621,18 @@ async function setDataForGoogleAndMS() {
 //    await getGoogleData();
 //});
 // Сохраняем в гугл и мой склад информацию о оплатах
-cron.schedule('* * * * *', async () => {
-    let now = new Date();
-    let minute = now.getMinutes();
+// cron.schedule('* * * * *', async () => {
+//     let now = new Date();
+//     let minute = now.getMinutes();
 
-    if (minute % 2 == 0) {
-        await getGoogleData();
-    } else {
-        await setDataForGoogleAndMS();
-    }
-});
+//     if (minute % 2 == 0) {
+//         await getGoogleData();
+//     } else {
+//         await setDataForGoogleAndMS();
+//     }
+// });
 
 app.listen(config.PORT, async () => {
-  console.log(`Example app listening on port ${config.PORT}!`)
+  console.log(`Example app listening on port ${config.PORT}!`);
+  await setDataForGoogleAndMS();
 });
