@@ -49,9 +49,17 @@ app.get('/', (req, res) => {
 
 async function sucPayment() {
 
+    const date = new Date();
+    date.setDate(date.getDate() - 3);
+
     let login = config.LOGIN_SBER;
     let pasw = config.PASSWORD_SBER;
-    let data = await models.Shop.find({ status: { $in: ['Регистрация оплаты', 'Авторизация отклонена'] } }).lean();
+    let data = await models.Shop.find({
+        $or: [
+            { status: 'Регистрация оплаты' },
+            { status: 'Авторизация отклонена', createdAt: { $gte: new Date(date) } }
+        ]
+    }).lean();
 
     for (let row of data){
         let order = row.numOrder;
@@ -527,7 +535,7 @@ async function setDataForGoogleAndMS() {
                 }
             } = row;
 
-            console.log(`Purchase: ${ms_purchase}, ID: ${numOrder}`);
+            console.log(`Purchase: ${ms_purchase}, ID: ${ms_numOrder}`);
             console.log(`Оплачено: ${isPayment}, Есть в гугле: ${isWriteGoogleSheet}, Есть в МС: ${isWriteMySklad}`);
 
             if (!isWriteGoogleSheet && isPayment) {
@@ -637,17 +645,19 @@ async function setDataForGoogleAndMS() {
    await getGoogleData();
 }); */
 //Сохраняем в гугл и мой склад информацию о оплатах
-cron.schedule('* * * * *', async () => {
-    let now = new Date();
-    let minute = now.getMinutes();
+// cron.schedule('* * * * *', async () => {
+//     let now = new Date();
+//     let minute = now.getMinutes();
 
-    if (minute % 2 == 0) {
-        await getGoogleData();
-    } else {
-        await setDataForGoogleAndMS();
-    }
-});
+//     if (minute % 2 == 0) {
+//         await getGoogleData();
+//     } else {
+//         await setDataForGoogleAndMS();
+//     }
+// });
 
 app.listen(config.PORT, async () => {
   console.log(`Example app listening on port ${config.PORT}!`);
+
+  await setDataForGoogleAndMS();
 });
