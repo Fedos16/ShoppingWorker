@@ -527,7 +527,7 @@ async function setDataForGoogleAndMS() {
                 }
             } = row;
 
-            if (!isWriteGoogleSheet) {
+            if (!isWriteGoogleSheet && isPayment) {
                 ids.push(row._id);
                 values.push([
                     row.purchase,
@@ -550,7 +550,7 @@ async function setDataForGoogleAndMS() {
             }
 
             if (isWriteMySklad && isWriteGoogleSheet && isPayment) {
-                if (status === 'Оплачено - не записано') {
+                if (status == 'Оплачено - не записано') {
                     await models.Shop.findOneAndUpdate( {_id }, { status: 'Оплачено - записано' });
                 }
 
@@ -558,6 +558,9 @@ async function setDataForGoogleAndMS() {
             }
 
             console.log(`Purchase: ${ms_purchase}, ID: ${_id}`);
+
+            // Если стоит отметка, что он уже есть в МС или же он не оплачен
+            if (isWriteMySklad || !isPayment) continue;
 
             // search Counterparty
             const tel = String(ms_telephone).replace(/\D/g, '');
