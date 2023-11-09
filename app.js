@@ -617,22 +617,21 @@ async function setDataForGoogleAndMS() {
 }
 
 // Забираем данные из гугла по статусу оплаты ...
-//cron.schedule('* * * * *', async () => {
-//    await getGoogleData();
-//});
-// Сохраняем в гугл и мой склад информацию о оплатах
-// cron.schedule('* * * * *', async () => {
-//     let now = new Date();
-//     let minute = now.getMinutes();
+/* cron.schedule('* * * * *', async () => {
+   await getGoogleData();
+}); */
+//Сохраняем в гугл и мой склад информацию о оплатах
+cron.schedule('* * * * *', async () => {
+    let now = new Date();
+    let minute = now.getMinutes();
 
-//     if (minute % 2 == 0) {
-//         await getGoogleData();
-//     } else {
-//         await setDataForGoogleAndMS();
-//     }
-// });
+    if (minute % 2 == 0) {
+        await getGoogleData();
+    } else {
+        await setDataForGoogleAndMS();
+    }
+});
 
 app.listen(config.PORT, async () => {
   console.log(`Example app listening on port ${config.PORT}!`);
-  await setDataForGoogleAndMS();
 });
