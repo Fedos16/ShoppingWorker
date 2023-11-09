@@ -503,25 +503,6 @@ async function setDataForGoogleAndMS() {
         
         for (let row of shop) {
 
-            values.push([
-                row.purchase,
-                row.nik,
-                row.telephone,
-                row.fio,
-                row.city,
-                row.index,
-                row.street,
-                row.home,
-                row.room,
-                row.delivery,
-                row.deliveryAddress,
-                row.comment,
-                row.numOrder,
-                row.sumOrder,
-                row.sumDelivery,
-                row.summ
-            ]);
-
             const { 
                 _id,
                 telephone: ms_telephone, 
@@ -538,12 +519,43 @@ async function setDataForGoogleAndMS() {
                 home: ms_home,
                 room: ms_room,
                 sumOrder: ms_sumOrder,
+                status,
                 serviceStatus: {
-                    googleSheets: isWriteGoogleSheet
+                    googleSheets: isWriteGoogleSheet,
+                    mySklad: isWriteMySklad,
+                    payment: isPayment
                 }
             } = row;
 
-            if (!isWriteGoogleSheet) ids.push(row._id);
+            if (!isWriteGoogleSheet) {
+                ids.push(row._id);
+                values.push([
+                    row.purchase,
+                    row.nik,
+                    row.telephone,
+                    row.fio,
+                    row.city,
+                    row.index,
+                    row.street,
+                    row.home,
+                    row.room,
+                    row.delivery,
+                    row.deliveryAddress,
+                    row.comment,
+                    row.numOrder,
+                    row.sumOrder,
+                    row.sumDelivery,
+                    row.summ
+                ]);
+            }
+
+            if (isWriteMySklad && isWriteGoogleSheet && isPayment) {
+                if (status === 'Оплачено - не записано') {
+                    await models.Shop.findOneAndUpdate( {_id }, { status: 'Оплачено - записано' });
+                }
+
+                continue;
+            }
 
             console.log(`Purchase: ${ms_purchase}, ID: ${_id}`);
 
