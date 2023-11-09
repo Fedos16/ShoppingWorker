@@ -527,6 +527,9 @@ async function setDataForGoogleAndMS() {
                 }
             } = row;
 
+            console.log(`Purchase: ${ms_purchase}, ID: ${numOrder}`);
+            console.log(`Оплачено: ${isPayment}, Есть в гугле: ${isWriteGoogleSheet}, Есть в МС: ${isWriteMySklad}`);
+
             if (!isWriteGoogleSheet && isPayment) {
                 ids.push(row._id);
                 values.push([
@@ -556,8 +559,6 @@ async function setDataForGoogleAndMS() {
 
                 continue;
             }
-
-            console.log(`Purchase: ${ms_purchase}, ID: ${_id}`);
 
             // Если стоит отметка, что он уже есть в МС или же он не оплачен
             if (isWriteMySklad || !isPayment) continue;
