@@ -361,49 +361,60 @@ async function setDataForGoogleAndMS() {
                         const price = parseInt(row.price);
                         const variant = row.variant;
 
-                        if (variant && variant.length > 10) {
-
-                            console.log('ID FOR VARIANT:', _id);
+                        await new Promise(async (resolve, reject) => {
                             try {
-                                const res = await axios.get(`${config.MS_URL}/variant/${encodeURIComponent(variant)}`, axiosParamsForMS);
-                                const href = res?.data?.meta?.href;
-                                if (href) {
-                                    positions.push({
-                                        "quantity": col,
-                                        "price": (price * 100) / col,
-                                        "assortment": {
-                                            "meta": {
-                                                "href": href,
-                                                "metadataHref": `${config.MS_URL}/variant/metadata`,
-                                                "type": "variant",
-                                                "mediaType": "application/json"
-                                            }
-                                        }
-                                    });
-                                }
-                            } catch(e) {
-                                console.log('VARIANT NOT FOUND');
-                            }
-                        } else {
-                            const art = row.art;
-                            const res = await axios.get(`${config.MS_URL}/product?search=${encodeURIComponent(art)}`, axiosParamsForMS);
+                                setTimeout(async () => {
+                                    if (variant && variant.length > 10) {
 
-                            if(res.data.rows.length) {
-                                positions.push({
-                                    "quantity": col,
-                                    "price": (price*100)/col,
-                                    "assortment": {
-                                        "meta": {
-                                            "href": res.data.rows[0].meta.href,
-                                            "metadataHref": `${config.MS_URL}/product/metadata`,
-                                            "type": "product",
-                                            "mediaType": "application/json"
+                                        console.log('ID FOR VARIANT:', _id);
+                                        try {
+                                            const res = await axios.get(`${config.MS_URL}/variant/${encodeURIComponent(variant)}`, axiosParamsForMS);
+                                            const href = res?.data?.meta?.href;
+                                            if (href) {
+                                                positions.push({
+                                                    "quantity": col,
+                                                    "price": (price * 100) / col,
+                                                    "assortment": {
+                                                        "meta": {
+                                                            "href": href,
+                                                            "metadataHref": `${config.MS_URL}/variant/metadata`,
+                                                            "type": "variant",
+                                                            "mediaType": "application/json"
+                                                        }
+                                                    }
+                                                });
+
+                                                resolve(true);
+                                            }
+                                        } catch(e) {
+                                            reject('VARIANT NOT FOUND');
+                                        }
+                                    } else {
+                                        const art = row.art;
+                                        const res = await axios.get(`${config.MS_URL}/product?search=${encodeURIComponent(art)}`, axiosParamsForMS);
+            
+                                        if(res.data.rows.length) {
+                                            positions.push({
+                                                "quantity": col,
+                                                "price": (price*100)/col,
+                                                "assortment": {
+                                                    "meta": {
+                                                        "href": res.data.rows[0].meta.href,
+                                                        "metadataHref": `${config.MS_URL}/product/metadata`,
+                                                        "type": "product",
+                                                        "mediaType": "application/json"
+                                                    }
+                                                }
+                                            });
+                                            
+                                            resolve(true);
                                         }
                                     }
-                                });
-                                
+                                }, 300)
+                            } catch(e) {
+                                reject(e);
                             }
-                        }
+                        })
 
                     }
 
@@ -496,17 +507,19 @@ async function setDataForGoogleAndMS() {
 
         const dateStart = new Date(2023, 1, 4);
 
+        console.log('\nFUNCTION WRITE IN BASES START\n');
+
         await sucPayment();
 
         // Формируем список заказов
         let values = [];
         let ids = [];
 
-        let shop = await models.Shop.find({ 
+        let shop = await models.Shop.find({
             $or: [
                 { status: 'Оплачено - не записано' }, 
                 { status: 'Оплачено - записано', createdAt: { $gte: dateStart }, 'serviceStatus.mySklad': false }
-            ] 
+            ],
         }).lean();
         
         for (let row of shop) {
@@ -571,6 +584,8 @@ async function setDataForGoogleAndMS() {
             // Если стоит отметка, что он уже есть в МС или же он не оплачен
             if (isWriteMySklad || !isPayment) continue;
 
+            continue;
+
             // search Counterparty
             const tel = String(ms_telephone).replace(/\D/g, '');
             const res = await axios.get(`${config.MS_URL}/counterparty?search=${tel}`, axiosParamsForMS);
@@ -603,11 +618,13 @@ async function setDataForGoogleAndMS() {
             }
         }
 
+        console.log('\nMS WORKING COMPLETED!\n');
+
         await GoogleSheets(async auth => {
             try {
                 const sheets = google.sheets({version: 'v4', auth});
 
-                if (shop.length > 0) {
+                if (values.length > 0) {
 
                     const resource = {
                         values,
@@ -622,6 +639,8 @@ async function setDataForGoogleAndMS() {
 
                     await models.Shop.updateMany({_id: { $in: ids }}, { status: 'Оплачено - записано', 'serviceStatus.googleSheets': true });
 
+                    console.log('\nGOOGLE SHEET WORKING COMPLETED!\n');
+
                 } else {
                     console.log('Not data for write');
                 }
@@ -630,6 +649,8 @@ async function setDataForGoogleAndMS() {
                 console.error(e);
             }
         });
+
+        console.log('\nFUNCTION WRITE IN BASES COMPLETED\n');
 
     } catch(e) {
         if (e?.data?.errors) {
