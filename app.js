@@ -342,6 +342,8 @@ async function getGoogleData() {
 async function setDataForGoogleAndMS() {
     async function create_ms_order({ _id, ms_sumOrder, ms_street, ms_home, ms_room, ms_purchase, ms_idProduct, ms_numOrder, counterparty, ms_delivery, ms_delivery_address, ms_city, ms_index }) {
         try {
+
+
             // search order in moysklad
             const res = await axios.get(`${config.MS_URL}/customerorder?filter=name=${ms_numOrder}`, axiosParamsForMS)
             if (res.data.rows.length) {
@@ -351,150 +353,146 @@ async function setDataForGoogleAndMS() {
 
             } else {
                 // generate positions
-                setTimeout(async function() {
+                await new Promise((resolve, reject) => {
+                    setTimeout(async function() {
 
-                    const positions = [];
-                    const products = ms_idProduct[ms_purchase];
-
-                    for (let row of products) {
-                        const col = parseInt(row.col) || 1;
-                        const price = parseInt(row.price);
-                        const variant = row.variant;
-
-                        await new Promise(async (resolve, reject) => {
+                        const positions = [];
+                        const products = ms_idProduct[ms_purchase];
+    
+                        for (let row of products) {
+                            const col = parseInt(row.col) || 1;
+                            const price = parseInt(row.price);
+                            const variant = row.variant;
+    
                             try {
-                                setTimeout(async () => {
-                                    if (variant && variant.length > 10) {
-
-                                        console.log('ID FOR VARIANT:', _id);
-                                        try {
-                                            const res = await axios.get(`${config.MS_URL}/variant/${encodeURIComponent(variant)}`, axiosParamsForMS);
-                                            const href = res?.data?.meta?.href;
-                                            if (href) {
-                                                positions.push({
-                                                    "quantity": col,
-                                                    "price": (price * 100) / col,
-                                                    "assortment": {
-                                                        "meta": {
-                                                            "href": href,
-                                                            "metadataHref": `${config.MS_URL}/variant/metadata`,
-                                                            "type": "variant",
-                                                            "mediaType": "application/json"
-                                                        }
-                                                    }
-                                                });
-
-                                                resolve(true);
-                                            }
-                                        } catch(e) {
-                                            reject('VARIANT NOT FOUND');
-                                        }
-                                    } else {
-                                        const art = row.art;
-                                        const res = await axios.get(`${config.MS_URL}/product?search=${encodeURIComponent(art)}`, axiosParamsForMS);
-            
-                                        if(res.data.rows.length) {
+                                if (variant && variant.length > 10) {
+    
+                                    console.log('ID FOR VARIANT:', _id);
+                                    try {
+                                        const res = await axios.get(`${config.MS_URL}/variant/${encodeURIComponent(variant)}`, axiosParamsForMS);
+                                        const href = res?.data?.meta?.href;
+                                        if (href) {
                                             positions.push({
                                                 "quantity": col,
-                                                "price": (price*100)/col,
+                                                "price": (price * 100) / col,
                                                 "assortment": {
                                                     "meta": {
-                                                        "href": res.data.rows[0].meta.href,
-                                                        "metadataHref": `${config.MS_URL}/product/metadata`,
-                                                        "type": "product",
+                                                        "href": href,
+                                                        "metadataHref": `${config.MS_URL}/variant/metadata`,
+                                                        "type": "variant",
                                                         "mediaType": "application/json"
                                                     }
                                                 }
                                             });
-                                            
-                                            resolve(true);
                                         }
+                                    } catch(e) {
+                                        reject('VARIANT NOT FOUND');
                                     }
-                                }, 300)
+                                } else {
+                                    const art = row.art;
+                                    const res = await axios.get(`${config.MS_URL}/product?search=${encodeURIComponent(art)}`, axiosParamsForMS);
+        
+                                    if(res.data.rows.length) {
+                                        positions.push({
+                                            "quantity": col,
+                                            "price": (price*100)/col,
+                                            "assortment": {
+                                                "meta": {
+                                                    "href": res.data.rows[0].meta.href,
+                                                    "metadataHref": `${config.MS_URL}/product/metadata`,
+                                                    "type": "product",
+                                                    "mediaType": "application/json"
+                                                }
+                                            }
+                                        });
+                                    }
+                                }
                             } catch(e) {
-                                reject(e);
+                                throw e;
                             }
-                        })
-
-                    }
-
-                    let description = `${ms_delivery} ${ms_index} ${ms_city} ${ms_delivery_address} ${ms_street} ${ms_home} ${ms_room}`;
-                    if (!ms_index) description = `${ms_delivery} ${ms_delivery_address} ${ms_street} ${ms_home} ${ms_room}`;
     
-                    // create order in moysklad
-                    const data = {
-                        "name": ms_numOrder,
-                        "organization": {
-                            "meta": {
-                                "href": `${config.MS_URL}/organization/5ef13089-5c69-11ea-0a80-03c20005831c`,
-                                "type": "organization",
-                                "mediaType": "application/json"
-                            }
-                        },
-                        "agent": {
-                            "meta": {
-                                "href": counterparty,
-                                "type": "counterparty",
-                                "mediaType": "application/json"
-                            }
-                        },
-                        "store": {
-                            "meta": {
-                                "href": `${config.MS_URL}/store/6d334937-71e7-11ec-0a80-09e500a6b0fd`,
-                                "type": "store",
-                                "mediaType": "application/json"
-                            }
-                        },
-                        "state": {
-                            "meta": {
-                            "href": `${config.MS_URL}/customerorder/metadata/states/dd8bc62a-caef-11e8-9109-f8fc0033f16c`,
-                            "type": "state",
-                            "mediaType": "application/json"
-                            }
-                        },
-                        "positions": positions,
-                        "description": description
-                    }
-
-                    const res = await axios.post(`${config.MS_URL}/customerorder`, data, axiosParamsForMS);
-
-                    console.log('New order №'+ms_numOrder+' created!');
-                    // create payment in moysklad
-                    const payment_data = {
-                        "name": ms_numOrder,
-                        "organization": {
-                            "meta": {
-                                "href": `${config.MS_URL}/organization/5ef13089-5c69-11ea-0a80-03c20005831c`,
-                                "metadataHref": `${config.MS_URL}/organization/metadata`,
-                                "type": "organization",
-                                "mediaType": "application/json"
-                            }
-                        },
-                        "agent": {
-                            "meta": {
-                                "href": counterparty,
-                                "metadataHref": `${config.MS_URL}/counterparty/metadata`,
-                                "type": "counterparty",
-                                "mediaType": "application/json"
-                            }
-                        },
-                        "sum": parseInt(ms_sumOrder) * 100,
-                        "vatSum": parseInt(ms_sumOrder) * 100,
-                        "operations": [
-                            {
+                        }
+    
+                        let description = `${ms_delivery} ${ms_index} ${ms_city} ${ms_delivery_address} ${ms_street} ${ms_home} ${ms_room}`;
+                        if (!ms_index) description = `${ms_delivery} ${ms_delivery_address} ${ms_street} ${ms_home} ${ms_room}`;
+        
+                        // create order in moysklad
+                        const data = {
+                            "name": ms_numOrder,
+                            "organization": {
                                 "meta": {
-                                    "href": res.data.meta.href,
-                                    "type": "customerorder"
-                                },
-                                "linkedSum": parseInt(ms_sumOrder) * 100
-                            }
-                        ]
-                    }
+                                    "href": `${config.MS_URL}/organization/5ef13089-5c69-11ea-0a80-03c20005831c`,
+                                    "type": "organization",
+                                    "mediaType": "application/json"
+                                }
+                            },
+                            "agent": {
+                                "meta": {
+                                    "href": counterparty,
+                                    "type": "counterparty",
+                                    "mediaType": "application/json"
+                                }
+                            },
+                            "store": {
+                                "meta": {
+                                    "href": `${config.MS_URL}/store/6d334937-71e7-11ec-0a80-09e500a6b0fd`,
+                                    "type": "store",
+                                    "mediaType": "application/json"
+                                }
+                            },
+                            "state": {
+                                "meta": {
+                                "href": `${config.MS_URL}/customerorder/metadata/states/dd8bc62a-caef-11e8-9109-f8fc0033f16c`,
+                                "type": "state",
+                                "mediaType": "application/json"
+                                }
+                            },
+                            "positions": positions,
+                            "description": description
+                        }
+    
+                        const res = await axios.post(`${config.MS_URL}/customerorder`, data, axiosParamsForMS);
+    
+                        console.log('New order №'+ms_numOrder+' created!');
+                        // create payment in moysklad
+                        const payment_data = {
+                            "name": _id,
+                            "organization": {
+                                "meta": {
+                                    "href": `${config.MS_URL}/organization/5ef13089-5c69-11ea-0a80-03c20005831c`,
+                                    "metadataHref": `${config.MS_URL}/organization/metadata`,
+                                    "type": "organization",
+                                    "mediaType": "application/json"
+                                }
+                            },
+                            "agent": {
+                                "meta": {
+                                    "href": counterparty,
+                                    "metadataHref": `${config.MS_URL}/counterparty/metadata`,
+                                    "type": "counterparty",
+                                    "mediaType": "application/json"
+                                }
+                            },
+                            "sum": parseInt(ms_sumOrder) * 100,
+                            "vatSum": parseInt(ms_sumOrder) * 100,
+                            "operations": [
+                                {
+                                    "meta": {
+                                        "href": res.data.meta.href,
+                                        "type": "customerorder"
+                                    },
+                                    "linkedSum": parseInt(ms_sumOrder) * 100
+                                }
+                            ]
+                        }
+    
+                        await axios.post(`${config.MS_URL}/paymentin`, payment_data, axiosParamsForMS);
+                        await models.Shop.findOneAndUpdate({ _id }, { 'serviceStatus.mySklad': true });
 
-                    await axios.post(`${config.MS_URL}/paymentin`, payment_data, axiosParamsForMS);
-                    await models.Shop.findOneAndUpdate({ _id }, { 'serviceStatus.mySklad': true });
-
-                }, 3000);
+                        resolve(true);
+    
+                    }, 3000);
+                })
             }
         } catch(e) {
             throw e;
@@ -581,8 +579,11 @@ async function setDataForGoogleAndMS() {
             // Если стоит отметка, что он уже есть в МС или же он не оплачен
             if (isWriteMySklad || !isPayment) continue;
 
-            // search Counterparty
             const tel = String(ms_telephone).replace(/\D/g, '');
+
+            console.log(`numOrder: ${ms_numOrder}, tel: ${tel}`);
+
+            // search Counterparty
             const res = await axios.get(`${config.MS_URL}/counterparty?search=${tel}`, axiosParamsForMS);
             if (res.data.rows.length) {
                 const counterparty = res.data.rows[0].meta.href;
@@ -597,6 +598,11 @@ async function setDataForGoogleAndMS() {
                     "name": ms_fio,
                     "phone": ms_telephone,
                     "attributes": [{
+                        "meta" : {
+                            "href" : `${config.MS_URL}/counterparty/metadata/attributes/9d6ea88b-02aa-11e9-9ff4-3150002312fb`,
+                            "type" : "attributemetadata",
+                            "mediaType" : "application/json"
+                        },
                         "id": "9d6ea88b-02aa-11e9-9ff4-3150002312fb",
                         "name": "Ник в Instagram",
                         "type": "string",
@@ -656,16 +662,18 @@ async function setDataForGoogleAndMS() {
     }
 }
 
-//Сохраняем в гугл и мой склад информацию о оплатах
-cron.schedule('* * * * *', async () => {
-    let now = new Date();
-    let minute = now.getMinutes();
+let IS_WRITE_DATA = true;
 
-    if (minute % 2 == 0) {
-        await getGoogleData();
-    } else {
+//Сохраняем в гугл и мой склад информацию о оплатах
+cron.schedule('*/3 * * * *', async () => {
+
+    if (IS_WRITE_DATA) {
         await setDataForGoogleAndMS();
+    } else {
+        await getGoogleData();
     }
+
+    IS_WRITE_DATA = !IS_WRITE_DATA;
 });
 
 app.listen(config.PORT, async () => {
