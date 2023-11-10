@@ -548,9 +548,6 @@ async function setDataForGoogleAndMS() {
                 }
             } = row;
 
-            console.log(`Purchase: ${ms_purchase}, ID: ${ms_numOrder}`);
-            console.log(`Оплачено: ${isPayment}, Есть в гугле: ${isWriteGoogleSheet}, Есть в МС: ${isWriteMySklad}`);
-
             if (!isWriteGoogleSheet && isPayment) {
                 ids.push(row._id);
                 values.push([
@@ -583,8 +580,6 @@ async function setDataForGoogleAndMS() {
 
             // Если стоит отметка, что он уже есть в МС или же он не оплачен
             if (isWriteMySklad || !isPayment) continue;
-
-            continue;
 
             // search Counterparty
             const tel = String(ms_telephone).replace(/\D/g, '');
