@@ -363,6 +363,10 @@ async function setDataForGoogleAndMS() {
                             const col = parseInt(row.col) || 1;
                             const price = parseInt(row.price);
                             const variant = row.variant;
+                            const art = row.art;
+                            const name = row.name;
+
+                            if (!name) continue;
     
                             try {
                                 if (variant && variant.length > 10) {
@@ -389,7 +393,6 @@ async function setDataForGoogleAndMS() {
                                         reject('VARIANT NOT FOUND');
                                     }
                                 } else {
-                                    const art = row.art;
                                     const res = await axios.get(`${config.MS_URL}/product?search=${encodeURIComponent(art)}`, axiosParamsForMS);
         
                                     if(res.data.rows.length) {
@@ -491,7 +494,7 @@ async function setDataForGoogleAndMS() {
 
                         resolve(true);
     
-                    }, 3000);
+                    }, 1000);
                 })
             }
         } catch(e) {
@@ -665,7 +668,7 @@ async function setDataForGoogleAndMS() {
 let IS_WRITE_DATA = true;
 
 //Сохраняем в гугл и мой склад информацию о оплатах
-cron.schedule('*/3 * * * *', async () => {
+cron.schedule('* * * * *', async () => {
 
     if (IS_WRITE_DATA) {
         await setDataForGoogleAndMS();
@@ -678,4 +681,5 @@ cron.schedule('*/3 * * * *', async () => {
 
 app.listen(config.PORT, async () => {
   console.log(`Example app listening on port ${config.PORT}!`);
+  await setDataForGoogleAndMS();
 });
